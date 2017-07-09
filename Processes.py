@@ -26,11 +26,11 @@ def BusProcess(input_q,output_q_list):
     print "Hey ;)"
     while(1) : 
         try: 
-            request = input_q.get(True, 0.1)
+            request = input_q.get(True)
             adress = request[0]
             output_q = output_q_list[request[1]-1]
             data = get_data(adress)
-            timestamp = time.clock()
+            timestamp = time.time()
             output_q.put([adress, data, timestamp, Process.name])
         except Empty:
             continue
@@ -51,14 +51,14 @@ def FrequencyProcess(frequency, sensors , id_q):
     # Set the parametrers
     period = 1./frequency
     # Set the clock
-    lastAcquistionTime = time.clock()
+    lastAcquistionTime = time.time()
     currentTime = lastAcquistionTime
     # Start the loop
     while (1):
         if ((currentTime - lastAcquistionTime) >= period):
             try:
                 # Update the acquistion time
-                lastAcquistionTime = time.clock()
+                lastAcquistionTime = time.time()
                 # Loop on sensors
                 for sensor in sensors :
                     # Create the data request
@@ -69,7 +69,7 @@ def FrequencyProcess(frequency, sensors , id_q):
                     bus_q.put(request)  
             except Empty:
                 continue
-        currentTime = time.clock()
+        currentTime = time.time()
 
 
 def WriterProcess(input_q , filename):
@@ -93,7 +93,7 @@ def WriterProcess(input_q , filename):
     # Start the loop
     while(1) :
         try:
-            result = input_q.get(True,0.05) # blocking get() with 0.05s timeout
+            result = input_q.get(True) # blocking get() with 0.05s timeout
             #result = [1,"toto",0.2,"BusName"]
             # write data in file
             adress = result[0]
@@ -112,7 +112,7 @@ def get_data(adress):
     """ Given an adress, returns the latest data available on this adress
     """
     data = "Dummy data"
-    return sin(time.clock() * 100.)
+    return sin(time.time() * 100.)
 
 #def main():
 if __name__ == "__main__" : 
@@ -122,39 +122,42 @@ if __name__ == "__main__" :
     
     # Create the input queues of the threads
     bus_1_q = manager.Queue()
-    bus_2_q = manager.Queue()
     freq_1_q = manager.Queue()
     freq_2_q = manager.Queue()
+    freq_3_q = manager.Queue()
     
     # Create the sensors list
-    freq_1_sensors = [[bus_1_q , 0x19]]
+    freq_1_sensors = [[bus_1_q , 0x19] , [bus_1_q , 0x02]]
     freq_2_sensors = [[bus_1_q , 0x11] , [bus_1_q , 0x31]]
-    
+    freq_3_sensors = [[bus_1_q , 0x12]]    
+
     # Create the freq_q list
-    freq_q_list = [freq_1_q , freq_2_q]
+    freq_q_list = [freq_1_q , freq_2_q , freq_3_q]
 
     #Create the buses & frequency threads
-    bus_1_process = Process(target=BusProcess , args = (bus_1_q, freq_q_list,))
-    bus_2_process = Process(target=BusProcess , args = (bus_2_q, freq_q_list, ))
-    freq_1_process = Process(target = FrequencyProcess , args = (1600, freq_1_sensors, 1,))
-    freq_2_process = Process(target = FrequencyProcess , args = (800, freq_2_sensors, 2,))
+    bus_1_process = Process(target=BusProcess , args = (bus_1_q, freq_q_list, ))
+    freq_1_process = Process(target = FrequencyProcess , args = (800, freq_1_sensors, 1, ))
+    freq_2_process = Process(target = FrequencyProcess , args = (100, freq_2_sensors, 2, ))
+    freq_3_process = Process(target = FrequencyProcess , args = (10, freq_3_sensors, 3, ))
     writ_1_process = Process(target = WriterProcess , args = (freq_1_q , "file1.csv",))
     writ_2_process = Process(target = WriterProcess , args = (freq_2_q , "file2.csv",))
+    writ_3_process = Process(target = WriterProcess , args = (freq_3_q , "file3.csv",))
 
 
     # Start all threads   
     freq_1_process.start()    
     freq_2_process.start() 
+    freq_3_process.start()
     writ_1_process.start()
     writ_2_process.start()
+    writ_3_process.start()
     #time.sleep(1.)
-    bus_1_process.start()    
-    bus_2_process.start() 
+    bus_1_process.start()
     
 
     print 'Assigned work to do to the threads'
 
-    time.sleep(1.0)
+    time.sleep(10.0)
     #time.sleep(2.0)
     
     print 'Stopping the threads'
@@ -164,14 +167,16 @@ if __name__ == "__main__" :
     freq_1_process.join()
     freq_2_process.terminate()
     freq_2_process.join()
+    freq_3_process.terminate()
+    freq_3_process.join()
     writ_1_process.terminate()
     writ_1_process.join()
     writ_2_process.terminate()
     writ_2_process.join()
+    writ_3_process.terminate()
+    writ_3_process.join()
     bus_1_process.terminate()
     bus_1_process.join()
-    bus_2_process.terminate()
-    bus_2_process.join()
     
     print 'Threads stopped'
     
